@@ -1,0 +1,16 @@
+{
+  "name": "laundry-playwright",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:list": "playwright test --list",
+    "test:auth": "playwright test --project=setup-admin --project=login",
+    "test:admin": "playwright test --project=admin",
+    "test:owner": "playwright test --project=owner"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "22.20.3",
+    "typescript": "5.9.3"
+  }
+}

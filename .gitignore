@@ -1,0 +1,12 @@
+node_modules/
+playwright-report/
+test-results/
+.playwright-mcp/
+tests/admin/auth.json
+tests/owner/auth.json
+tests/auth/auth.json
+tests/admin/auth/login-data.json
+tests/owner/login-data.json
+.env
+.env.*
+!.env.example

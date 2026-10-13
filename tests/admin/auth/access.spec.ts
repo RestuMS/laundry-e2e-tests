@@ -1,0 +1,8 @@
+import { expect, test } from '@playwright/test';
+
+test('Pengguna tanpa sesi login diarahkan ke halaman Login saat membuka Dashboard', async ({ page }) => {
+  await page.goto('/dashboard');
+
+  await expect(page).toHaveURL(/\/login(?:\?.*)?$/);
+  await expect(page.getByRole('button', { name: 'Login' })).toBeVisible();
+});
