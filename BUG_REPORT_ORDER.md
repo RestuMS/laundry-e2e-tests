@@ -1,11 +1,12 @@
-# QA Bug Report & Design Observations: Modul Order & Pelanggan
+# QA Bug Report & Design Observations: Modul Order, Pelanggan, & Laporan
 
 **Aplikasi**: LaundryPro Management System  
-**Modul**: Order, Dashboard, & Pelanggan  
-**Tanggal Pengujian**: 20 Oktober 2026  
+**Modul**: Order, Dashboard, Pelanggan, & Laporan  
+**Tanggal Pengujian**: 20 - 21 Oktober 2026  
 **Penulis**: Senior QA Engineer & Playwright Automation Engineer  
 **Status Test Suite Order**: 17 / 17 Passed (100% Lulus pada `tests/admin/order/order.spec.ts`)  
-**Status Test Suite Pelanggan**: 8 Passed, 9 Failed (Akibat `BUG-CUST-01` pada `tests/admin/pelanggan/pelanggan.spec.ts`)
+**Status Test Suite Pelanggan**: 8 Passed, 9 Failed (Akibat `BUG-CUST-01` pada `tests/admin/pelanggan/pelanggan.spec.ts`)  
+**Status Test Suite Laporan**: 9 Passed, 5 Failed (pada `tests/admin/laporan/laporan.spec.ts`)
 
 ---
 
@@ -278,6 +279,69 @@ Ganti karakter korup tersebut dengan SVG icon atau Phosphor Icon yang valid:
 
 ---
 
+### BUG-LAP-01: Kontrol "Filter Default" Tidak Menggunakan Semantic Tag `<a>` / `<button>` atau `role="button"` (Accessibility Defect)
+
+- **ID Bug**: `BUG-LAP-01`
+- **Severity**: **Medium**
+- **Priority**: **P2**
+- **Komponen**: Toolbar Filter Tanggal Halaman Laporan (`/laporan`)
+- **File Terdampak**: `resources/views/dashboard/laporan.blade.php` (atau template terkait toolbar filter)
+- **Ringkasan**:
+  Elemen kontrol "Filter Default" dirender menggunakan static text container (`<div>` / `<span>`) tanpa tag semantic interaktif `<a>` atau `<button>`, serta tanpa atribut aksesibilitas `role="button"` atau `tabindex="0"`.
+  **Dampak Fungsional**:
+  1. Kontrol tidak dapat difokuskan atau diaktifkan oleh pengguna yang menggunakan navigasi keyboard (tidak aksesibel).
+  2. Screen reader dan accessibility tree browser memperlakukan elemen ini hanya sebagai static text node (`- text: Filter Default Pilih Hari/Tgl`), bukan sebagai pemicu aksi (actionable control).
+  3. Playwright accessibility role locator `getByRole('button')` atau `getByRole('link')` gagal menemukan elemen ini (`TC-LAPORAN-09` gagal timeout).
+
+#### Langkah Reproduksi (Steps to Reproduce):
+1. Login sebagai Admin dan buka rute laporan berparameter tanggal: `http://127.0.0.1:8000/laporan?tanggal=2024-01-15`.
+2. Buka DevTools Browser (Inspect Element) pada teks **Filter Default**.
+3. Coba lakukan navigasi tombol Tab keyboard untuk menuju ke kontrol "Filter Default".
+
+#### Hasil Aktual (Actual Result):
+- Elemen tidak memiliki tag `<a>` maupun `<button>`, dan tidak memiliki `role="button"`.
+- Tab keyboard melompati teks "Filter Default" dan langsung fokus ke input date picker.
+- Pohon aksesibilitas (Accessibility Tree) mencatat:
+  ```yaml
+  - text: Filter Default Pilih Hari/Tgl
+  - textbox
+  ```
+
+#### Hasil yang Diharapkan (Expected Result):
+- Elemen menggunakan semantic link atau button:
+  `<a href="{{ route('laporan.index') }}" role="button" class="...">Filter Default</a>`
+- Pengguna keyboard dapat memfokuskan elemen dan menekan `Enter` / `Space` untuk mereset filter tanggal kembali ke kondisi awal.
+
+#### Rekomendasi Solusi Teknis (Code Fix Recommendation):
+Ganti elemen teks pembungkus "Filter Default" dengan semantic anchor link:
+```diff
+- <span class="...">Filter Default</span>
++ <a href="{{ route('laporan.index') }}" role="button" class="inline-flex items-center text-xs font-semibold text-primary hover:underline cursor-pointer">Filter Default</a>
+```
+
+---
+
+### BUG-LAP-02: Ketiadaan Visualisasi / Empty State Rendering pada Panel "Distribusi Layanan"
+
+- **ID Bug**: `BUG-LAP-02`
+- **Severity**: **Low**
+- **Priority**: **P3**
+- **Komponen**: Panel Distribusi Layanan Halaman Laporan (`/laporan`)
+- **File Terdampak**: `resources/views/dashboard/laporan.blade.php`
+- **Ringkasan**:
+  Panel "Distribusi Layanan" menampilkan heading level 3 dan subjudul deskriptif *"Estimasi kontribusi per produk."*, namun area konten visual di dalamnya kosong melompong (tidak ada elemen canvas, donut/bar chart, maupun placeholder teks empty state).
+  **Dampak Visual**:
+  Tampilan kartu terlihat seperti fitur yang terpotong atau belum selesai dikembangkan (*unfinished component*) ketika Admin meninjau laporan analitik operasional.
+
+#### Hasil Aktual (Actual Result):
+- Kontainer card hanya memuat teks judul tanpa ada elemen visual grafik maupun pesan fallback.
+
+#### Hasil yang Diharapkan (Expected Result):
+- Jika data transaksi layanan tersedia: Tampilkan chart visualisasi (misal Doughnut Chart via Chart.js).
+- Jika data transaksi layanan belum ada: Tampilkan ilustrasi empty state informatif, misal: *"Belum ada data distribusi pesanan layanan pada periode ini."*.
+
+---
+
 ## 2. Observasi Desain & Antarmuka (UX & Design Observations)
 
 ### OBS-ORD-01: Pemotongan (Truncation) Nama Pelanggan pada Cetak Struk Thermal
@@ -317,6 +381,41 @@ Ganti karakter korup tersebut dengan SVG icon atau Phosphor Icon yang valid:
   Elemen backdrop (`div.absolute`) dan elemen container luar (`div.fixed`) keduanya menggunakan `x-show="deleteModalOpen"` / `x-show="paymentModalOpen"`. Selector umum seperti `div[x-show="deleteModalOpen"]` menghasilkan 3 node di DOM tree.
 - **Rekomendasi**:
   Pada sisi test automation Playwright, pastikan selalu menggunakan selector spesifik `div.fixed[x-show="deleteModalOpen"]` untuk menghindari ambiguitas strict mode.
+
+---
+
+### OBS-LAP-01: Ketiadaan Tabel Rincian Transaksi, Filter Status Pembayaran, dan Paginasi pada Modul Laporan
+
+- **Komponen**: Halaman Utama Laporan & Analitik (`/laporan`)
+- **Observasi Arsitektur & Bisnis**:
+  Halaman Laporan saat ini difungsikan sebagai dashboard ringkasan eksekutif (agregat 4 kartu metrik dan grafik trend pemasukan bulanan). Tidak tersedia:
+  1. **Tabel Data Transaksi Detail**: Admin tidak dapat melihat daftar transaksi individual (No Nota, Tanggal, Pelanggan, Layanan, Subtotal, Status Bayar) secara langsung di halaman web.
+  2. **Filter Status Transaksi**: Tidak ada penyaringan berdasarkan status bayar (*Lunas*, *Belum Lunas*, *Dibatalkan*).
+  3. **Rentang Tanggal (Date Range Picker)**: Hanya tersedia *single date picker* (`PILIH HARI/TGL`), bukan rentang Tanggal Mulai s/d Tanggal Selesai.
+- **Dampak Pengujian Otomasi**:
+  Skenario `TC-LAPORAN-05` (validasi Tanggal Selesai < Tanggal Mulai) dan `TC-LAPORAN-06` (filter status) tidak dapat diimplementasikan karena komponen UI terkait tidak disediakan oleh desain aplikasi saat ini.
+- **Rekomendasi**:
+  Tambahkan tabel rincian transaksi di bawah grafik analitik lengkap dengan filter status pembayaran, date range picker (Start - End Date), dan paginasi server-side agar Admin dapat melakukan audit data sebelum mengekspor PDF/Excel.
+
+---
+
+### OBS-LAP-02: Ambiguitas Keyword "Pemasukan" pada DOM Tree Menimbulkan Strict Mode Collision
+
+- **Komponen**: Kartu Ringkasan Metrik & Panel Grafik Trend (`/laporan`)
+- **Observasi QA Automation**:
+  Kata teks "PEMASUKAN" hadir pada kartu ringkasan keuangan (`PEMASUKAN (21 OCT 2026)`) dan sekaligus hadir pada heading panel grafik (`Trend Pemasukan Bulanan`). Karena kedua elemen dibungkus oleh container kartu Tailwind `.glass-panel` yang seragam, locator filter berbasis teks `/PEMASUKAN/i` pada Playwright menghasilkan 2 node elemen (strict mode violation pada `TC-LAPORAN-02` dan `TC-LAPORAN-08`).
+- **Rekomendasi**:
+  Tambahkan penanda atribut uji yang unik pada elemen kartu ringkasan, misalnya `data-testid="summary-card-income"` atau class spesifik `report-card-income` agar locator automation tidak rentan terhadap duplikasi kata kunci antar-komponen.
+
+---
+
+### OBS-LAP-03: Indikator Trend Persentase Menggunakan Icon SVG Tanpa Text/Aria-label Unicode
+
+- **Komponen**: Badge Trend Persentase Kartu Ringkasan
+- **Observasi Aksesibilitas**:
+  Indikator arah panah (naik/turun) pada badge persentase (misal `2.4%`, `14.5%`) dirender murni sebagai SVG icon inline tanpa teks deskriptor unicode (`↑` atau `↓`) dan tanpa atribut `aria-label="naik 2.4%"`. Akibatnya, `innerText` hanya menghasilkan `"2.4%"` atau `"14.5%"` tanpa konteks arah fluktuasi, dan screen reader tidak dapat mengumumkan apakah angka tersebut merepresentasikan kenaikan atau penurunan omset.
+- **Rekomendasi**:
+  Sertakan teks tersembunyi untuk screen reader: `<span class="sr-only">Naik</span> 2.4%` atau tambahkan `aria-label="Kenaikan 2.4%"`.
 
 ---
 
@@ -363,3 +462,24 @@ Ganti karakter korup tersebut dengan SVG icon atau Phosphor Icon yang valid:
 | **TC-PELANGGAN-16** | Pelanggan | **Negative** | **PASS** | 0.8s | Akses rute `/pelanggan` tanpa sesi login dialihkan ke `/login`. |
 | **TC-PELANGGAN-17** | Pelanggan | **Negative** | **PASS** | 2.8s | Pencarian dengan keyword acak berhasil menampilkan empty state. |
 | **TC-PELANGGAN-18** | Pelanggan | **Negative** | **PASS** | 3.2s | Validasi server nama > 255 karakter memunculkan pesan error dengan benar. |
+
+---
+
+### Modul Laporan (`tests/admin/laporan/laporan.spec.ts`)
+
+| Test Case ID | Modul | Jenis | Status | Durasi | Keterangan / Root Cause |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **TC-LAPORAN-01** | Laporan | Positive | **PASS** | 2.1s | Berhasil membuka rute `/laporan` setelah login Admin dan mengenali heading "Laporan & Analitik". |
+| **TC-LAPORAN-02** | Laporan | Positive | **FAIL** | 2.0s | Strict mode violation: kata "PEMASUKAN" terduplikasi pada kartu metrik dan panel grafik `Trend Pemasukan Bulanan` (`OBS-LAP-02`). |
+| **TC-LAPORAN-03** | Laporan | Positive | **PASS** | 4.4s | Input tanggal (`input[type="date"]`) dapat dipilih dan diisi dengan format valid. |
+| **TC-LAPORAN-04** | Laporan | Positive | **PASS** | 2.8s | Halaman memproses submit filter tanggal dan data ringkasan tetap valid. |
+| **TC-LAPORAN-07** | Laporan | Positive | **PASS** | 1.8s | Empty state saat filter tanggal masa depan menampilkan Rp 0 tanpa karakter rusak NaN/null/undefined. |
+| **TC-LAPORAN-08** | Laporan | Positive | **FAIL** | 1.2s | Strict mode violation: locator kartu PEMASUKAN ambigu dengan panel grafik Trend Pemasukan Bulanan (`OBS-LAP-02`). |
+| **TC-LAPORAN-09** | Laporan | Positive | **FAIL** | 7.0s | Kontrol "Filter Default" dirender sebagai plain static text tanpa semantic `<a>` / `<button>` / `role="button"` (`BUG-LAP-01`). |
+| **TC-LAPORAN-10** | Laporan | Positive | **PASS** | 16.6s | Tombol "Export PDF" berhasil dipicu dan membuka stream download/cetak dokumen PDF. |
+| **TC-LAPORAN-11** | Laporan | Positive | **PASS** | 1.9s | Tombol "Export Excel" berhasil dipicu dan mengunduh file spreadsheet laporan. |
+| **TC-LAPORAN-12** | Laporan | Positive | **FAIL** | 6.9s | Canvas grafik Trend Pemasukan Bulanan berada di dalam hirarki kontainer terpisah yang tidak terjangkau locator heading-to-canvas (`OBS-LAP-04`). |
+| **TC-LAPORAN-13** | Laporan | Positive | **PASS** | 1.7s | Heading dan panel kontainer "Distribusi Layanan" berhasil diverifikasi tampil. |
+| **TC-LAPORAN-14** | Laporan | Positive | **FAIL** | 1.1s | Badge trend persentase menggunakan inline SVG icon tanpa teks panah unicode `↑/↓` (`OBS-LAP-03`). |
+| **TC-LAPORAN-15** | Laporan | Positive | **PASS** | 2.1s | Halaman Laporan dapat dimuat ulang (refresh) tanpa error JavaScript atau runtime exception. |
+| **TC-LAPORAN-16** | Laporan | **Negative** | **PASS** | 1.3s | Pengguna tanpa sesi login yang mengakses `/laporan` diarahkan kembali ke `/login`. |

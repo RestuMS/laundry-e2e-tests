@@ -49,6 +49,7 @@ export default defineConfig({
         'admin/layanan/**/*.spec.ts',
         'admin/order/**/*.spec.ts',
         'admin/pelanggan/**/*.spec.ts',
+        'admin/laporan/**/*.spec.ts',
       ],
       use: {
         ...devices['Desktop Chrome'],
